@@ -1,0 +1,393 @@
+// API Guardian — Prisma Schema
+// Optimised for dashboard statistics queries
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────
+// Auth
+// ─────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  projects      Project[]
+  notifications Notification[]
+  webhooks      Webhook[]
+
+  @@index([email])
+}
+
+// ─────────────────────────────────────────────────
+// Projects
+// ─────────────────────────────────────────────────
+
+model Project {
+  id                         String      @id @default(uuid())
+  userId                     String
+  name                       String
+  description                String?
+  baseUrl                    String
+  environment                Environment @default(PRODUCTION)
+  isDemo                     Boolean     @default(false)
+  consecutiveFailureThreshold Int        @default(3)
+  createdAt                  DateTime    @default(now())
+  updatedAt                  DateTime    @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoints     Endpoint[]
+  incidents     Incident[]
+  logs          Log[]
+  notifications Notification[]
+  webhooks      Webhook[]
+
+  @@index([userId])
+  @@index([userId, createdAt])
+}
+
+enum Environment {
+  PRODUCTION
+  STAGING
+  DEVELOPMENT
+  TESTING
+}
+
+// ─────────────────────────────────────────────────
+// Endpoints
+// ─────────────────────────────────────────────────
+
+model Endpoint {
+  id                 String           @id @default(uuid())
+  projectId          String
+  name               String
+  method             HttpMethod       @default(GET)
+  path               String
+  description        String?
+  headers            Json             @default("[]")
+  parameters         Json             @default("[]")
+  body               String?
+  expectedStatusCode Int              @default(200)
+  expectedSchema     String?          // JSON schema string
+  timeoutMs          Int              @default(30000)
+  schedule           ScheduleInterval @default(MANUAL)
+  isActive           Boolean          @default(true)
+  authType           AuthType         @default(NONE)
+  authConfig         String?          // encrypted/stored auth config
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  testRuns   TestRun[]
+  assertions Assertion[]
+  incidents  Incident[]
+  contracts  ApiContract[]
+  logs       Log[]
+
+  @@index([projectId])
+  @@index([projectId, isActive])
+  @@index([schedule, isActive])
+}
+
+enum HttpMethod {
+  GET
+  POST
+  PUT
+  PATCH
+  DELETE
+}
+
+enum ScheduleInterval {
+  MANUAL
+  EVERY_1_MIN
+  EVERY_5_MIN
+  EVERY_15_MIN
+  EVERY_30_MIN
+  EVERY_1_HOUR
+  EVERY_6_HOURS
+  DAILY
+}
+
+enum AuthType {
+  NONE
+  BEARER
+  BASIC
+  API_KEY
+}
+
+// ─────────────────────────────────────────────────
+// Assertions
+// ─────────────────────────────────────────────────
+
+model Assertion {
+  id         String            @id @default(uuid())
+  endpointId String
+  type       AssertionType
+  field      String?
+  operator   AssertionOperator
+  expected   String
+  isActive   Boolean           @default(true)
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  endpoint Endpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId])
+}
+
+enum AssertionType {
+  STATUS_CODE
+  RESPONSE_TIME
+  JSON_FIELD
+  JSON_SCHEMA
+  HEADER
+  BODY_CONTAINS
+  BODY_NOT_CONTAINS
+}
+
+enum AssertionOperator {
+  EQUALS
+  NOT_EQUALS
+  LESS_THAN
+  GREATER_THAN
+  LESS_THAN_OR_EQUAL
+  GREATER_THAN_OR_EQUAL
+  CONTAINS
+  NOT_CONTAINS
+  EXISTS
+  NOT_EXISTS
+  MATCHES_SCHEMA
+}
+
+// ─────────────────────────────────────────────────
+// Test Runs
+// ─────────────────────────────────────────────────
+
+model TestRun {
+  id               String        @id @default(uuid())
+  endpointId       String
+  status           TestRunStatus
+  statusCode       Int?
+  responseTimeMs   Int?
+  responseBody     String?
+  responseHeaders  Json          @default("{}")
+  errorMessage     String?
+  assertionResults Json          @default("[]")
+  triggeredBy      TriggerSource @default(SCHEDULER)
+  timestamp        DateTime      @default(now())
+
+  endpoint    Endpoint     @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  aiAnalyses  AiAnalysis[]
+
+  @@index([endpointId])
+  @@index([endpointId, timestamp(sort: Desc)])
+  @@index([endpointId, status])
+  @@index([timestamp(sort: Desc)])
+}
+
+enum TestRunStatus {
+  PASSED
+  FAILED
+  TIMEOUT
+  ERROR
+}
+
+enum TriggerSource {
+  MANUAL
+  SCHEDULER
+}
+
+// ─────────────────────────────────────────────────
+// Incidents
+// ─────────────────────────────────────────────────
+
+model Incident {
+  id           String           @id @default(uuid())
+  endpointId   String
+  projectId    String
+  status       IncidentStatus   @default(OPEN)
+  severity     IncidentSeverity @default(MEDIUM)
+  title        String
+  errorMessage String?
+  failureCount Int              @default(1)
+  affectedChecks Int            @default(0)
+  startedAt    DateTime         @default(now())
+  resolvedAt   DateTime?
+  updatedAt    DateTime         @updatedAt
+
+  endpoint Endpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  project  Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@index([endpointId])
+  @@index([status])
+  @@index([projectId, status])
+  @@index([startedAt(sort: Desc)])
+}
+
+enum IncidentStatus {
+  OPEN
+  INVESTIGATING
+  RESOLVED
+}
+
+enum IncidentSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ─────────────────────────────────────────────────
+// API Contract Monitoring
+// ─────────────────────────────────────────────────
+
+model ApiContract {
+  id         String   @id @default(uuid())
+  endpointId String
+  spec       String   // OpenAPI spec or JSON schema string
+  specType   SpecType @default(JSON_SCHEMA)
+  version    String
+  isBaseline Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  endpoint Endpoint        @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  changes  ContractChange[]
+
+  @@index([endpointId])
+  @@index([endpointId, createdAt(sort: Desc)])
+}
+
+enum SpecType {
+  OPENAPI
+  JSON_SCHEMA
+}
+
+model ContractChange {
+  id            String             @id @default(uuid())
+  contractId    String
+  field         String
+  changeType    ContractChangeType
+  previousValue String?
+  currentValue  String?
+  severity      IncidentSeverity   @default(MEDIUM)
+  detectedAt    DateTime           @default(now())
+
+  contract ApiContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@index([contractId])
+  @@index([detectedAt(sort: Desc)])
+}
+
+enum ContractChangeType {
+  FIELD_REMOVED
+  FIELD_ADDED
+  TYPE_CHANGED
+  STATUS_CODE_CHANGED
+  REQUIRED_FIELD_MISSING
+}
+
+// ─────────────────────────────────────────────────
+// Logs
+// ─────────────────────────────────────────────────
+
+model Log {
+  id         String    @id @default(uuid())
+  projectId  String?
+  endpointId String?
+  level      LogLevel
+  service    String
+  message    String
+  metadata   Json      @default("{}")
+  timestamp  DateTime  @default(now())
+
+  project  Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  endpoint Endpoint? @relation(fields: [endpointId], references: [id], onDelete: SetNull)
+
+  @@index([projectId])
+  @@index([endpointId])
+  @@index([level])
+  @@index([timestamp(sort: Desc)])
+  @@index([projectId, timestamp(sort: Desc)])
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+  CRITICAL
+}
+
+// ─────────────────────────────────────────────────
+// Notifications
+// ─────────────────────────────────────────────────
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  projectId String
+  type      NotificationType
+  config    Json
+  enabled   Boolean          @default(true)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([projectId])
+}
+
+enum NotificationType {
+  EMAIL
+  WEBHOOK
+}
+
+model Webhook {
+  id        String   @id @default(uuid())
+  projectId String
+  userId    String
+  url       String
+  secret    String?
+  events    String[] // JSON array of WebhookEvent strings
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+// ─────────────────────────────────────────────────
+// AI Analysis
+// ─────────────────────────────────────────────────
+
+model AiAnalysis {
+  id               String           @id @default(uuid())
+  testRunId        String
+  summary          String
+  probableCause    String
+  confidence       Float
+  evidence         String[]
+  suggestedActions String[]
+  severity         IncidentSeverity
+  provider         String           @default("mock")
+  createdAt        DateTime         @default(now())
+
+  testRun TestRun @relation(fields: [testRunId], references: [id], onDelete: Cascade)
+
+  @@index([testRunId])
+}
