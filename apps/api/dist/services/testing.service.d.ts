@@ -1,4 +1,5 @@
 import { TestRun, TestRunStatus } from '@api-guardian/shared';
+import { Prisma } from '@prisma/client';
 export declare class TestingService {
     runTest(userId: string, endpointId: string, triggeredBy?: 'MANUAL' | 'SCHEDULER'): Promise<TestRun>;
     getResults(userId: string, endpointId: string, options?: {
@@ -6,8 +7,20 @@ export declare class TestingService {
         pageSize?: number;
         status?: TestRunStatus;
     }): Promise<{
-        data: any;
-        total: any;
+        data: {
+            statusCode: number | null;
+            id: string;
+            endpointId: string;
+            status: import("@prisma/client").$Enums.TestRunStatus;
+            errorMessage: string | null;
+            timestamp: Date;
+            responseTimeMs: number | null;
+            responseBody: string | null;
+            responseHeaders: Prisma.JsonValue;
+            assertionResults: Prisma.JsonValue;
+            triggeredBy: import("@prisma/client").$Enums.TriggerSource;
+        }[];
+        total: number;
         page: number;
         pageSize: number;
         totalPages: number;

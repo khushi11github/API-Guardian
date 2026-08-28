@@ -1,4 +1,5 @@
 import { LogLevel } from '@api-guardian/shared';
+import { Prisma } from '@prisma/client';
 interface LogInput {
     projectId?: string | null;
     endpointId?: string | null;
@@ -19,8 +20,23 @@ export declare class LogService {
         page?: number;
         pageSize?: number;
     }): Promise<{
-        data: any;
-        total: any;
+        data: ({
+            endpoint: {
+                name: string;
+                method: import("@prisma/client").$Enums.HttpMethod;
+                path: string;
+            } | null;
+        } & {
+            message: string;
+            id: string;
+            projectId: string | null;
+            endpointId: string | null;
+            level: import("@prisma/client").$Enums.LogLevel;
+            service: string;
+            metadata: Prisma.JsonValue;
+            timestamp: Date;
+        })[];
+        total: number;
         page: number;
         pageSize: number;
         totalPages: number;
