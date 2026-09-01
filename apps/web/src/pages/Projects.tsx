@@ -70,7 +70,7 @@ export const Projects: React.FC = () => {
     },
   });
 
-  const envVariants: Record<string, 'success' | 'warning' | 'info' | 'purple'> = {
+  const envVariants: Record<string, 'success' | 'warning' | 'info' | 'purple' | 'danger'> = {
     PRODUCTION: 'danger',
     STAGING: 'warning',
     DEVELOPMENT: 'info',
