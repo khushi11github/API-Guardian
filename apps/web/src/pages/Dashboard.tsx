@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/axios';
 import { Card } from '../components/ui/Card';
@@ -17,6 +17,9 @@ import {
   Sparkles,
   Play,
   Layers,
+  Zap,
+  RefreshCw,
+  GitCommit,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -47,6 +50,19 @@ export const Dashboard: React.FC = () => {
       return data.data;
     },
   });
+
+  // Animate number on mount
+  const [animated, setAnimated] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setAnimated(true), 100);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Last-refreshed relative time
+  const [lastRefresh, setLastRefresh] = useState('just now');
+  useEffect(() => {
+    if (!isLoading) setLastRefresh('just now');
+  }, [isLoading]);
 
   // Calculate aggregated health metrics
   const totalApis = dashboardData?.totalEndpoints ?? 0;
@@ -87,20 +103,33 @@ export const Dashboard: React.FC = () => {
     { day: 'Sun', uptime: overallUptime },
   ];
 
+  // Activity feed (static demo items)
+  const activityFeed = [
+    { time: '22:54', status: 'ok', method: 'GET', path: '/api/products', ms: 118, project: 'E-Commerce API' },
+    { time: '22:53', status: 'ok', method: 'POST', path: '/api/orders', ms: 203, project: 'Order Service' },
+    { time: '22:52', status: 'error', method: 'POST', path: '/api/payments/charge', ms: 5012, project: 'Payment Gateway' },
+    { time: '22:51', status: 'ok', method: 'GET', path: '/api/users/me', ms: 67, project: 'Auth Service' },
+    { time: '22:50', status: 'warn', method: 'GET', path: '/api/inventory', ms: 890, project: 'Inventory Service' },
+    { time: '22:49', status: 'ok', method: 'DELETE', path: '/api/sessions/abc123', ms: 44, project: 'Auth Service' },
+  ];
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 animate-fade-in">
       {/* Top Banner: System Health Header */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-[#0f172a] to-slate-900 border border-slate-800 p-6 md:p-8">
         <div className="absolute right-0 top-0 w-96 h-full bg-primary-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute left-1/3 top-0 w-64 h-full bg-indigo-600/5 blur-3xl pointer-events-none" />
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-primary-500/10 border border-primary-500/30 text-primary-300 text-xs font-mono">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>Real-Time Monitor Active</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
             </div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
-              API Guardian Overview
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+              <span className="text-white">API Guardian </span>
+              <span className="text-gradient">Overview</span>
             </h1>
             <p className="text-sm text-slate-400 max-w-xl">
               Continuous synthetic testing, regression analysis, schema drift detection and automated root-cause suggestions.
@@ -121,6 +150,13 @@ export const Dashboard: React.FC = () => {
                 {activeIncidents} Active Incident{activeIncidents === 1 ? '' : 's'}
               </Button>
             </Link>
+            <button
+              onClick={() => refetch()}
+              className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-slate-200 hover:border-slate-600 hover:bg-slate-800/60 transition-all"
+              title="Refresh data"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
           </div>
         </div>
 
@@ -167,53 +203,84 @@ export const Dashboard: React.FC = () => {
 
       {/* KPI Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <Card glow className="relative overflow-hidden">
+        <Card glow className="relative overflow-hidden card-hover-glow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
             <span>Total Endpoints</span>
-            <Activity className="w-4 h-4 text-primary-400" />
+            <div className="w-7 h-7 rounded-lg bg-primary-500/15 flex items-center justify-center">
+              <Activity className="w-3.5 h-3.5 text-primary-400" />
+            </div>
           </div>
-          <div className="text-3xl font-bold text-white tracking-tight">{totalApis || 12}</div>
+          <div className={`text-3xl font-bold text-white tracking-tight ${animated ? 'animate-count-up' : 'opacity-0'}`}>
+            {totalApis || 12}
+          </div>
           <div className="mt-2 text-xs text-slate-400 flex items-center gap-1">
             <span className="text-emerald-400 font-medium">100% covered</span> by automated checks
           </div>
+          {/* Mini dot sparkline */}
+          <div className="absolute bottom-2 right-2 flex items-end gap-0.5">
+            {[3, 5, 4, 6, 4, 7, 6].map((h, i) => (
+              <div key={i} className="w-1 rounded-sm bg-primary-500/30" style={{ height: `${h * 3}px` }} />
+            ))}
+          </div>
         </Card>
 
-        <Card glow className="relative overflow-hidden">
+        <Card glow className="relative overflow-hidden card-hover-glow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
             <span>Avg Response Latency</span>
-            <Clock className="w-4 h-4 text-cyan-400" />
+            <div className="w-7 h-7 rounded-lg bg-cyan-500/15 flex items-center justify-center">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+            </div>
           </div>
-          <div className="text-3xl font-bold text-white tracking-tight flex items-baseline gap-2">
+          <div className={`text-3xl font-bold text-white tracking-tight flex items-baseline gap-2 ${animated ? 'animate-count-up' : 'opacity-0'}`}>
             {avgResponseTime || 142} <span className="text-sm font-normal text-slate-400">ms</span>
           </div>
           <div className="mt-2 text-xs text-emerald-400 flex items-center gap-1">
             <TrendingDown className="w-3.5 h-3.5" /> 12% faster than 7d baseline
           </div>
+          <div className="absolute bottom-2 right-2 flex items-end gap-0.5">
+            {[7, 6, 8, 5, 4, 5, 4].map((h, i) => (
+              <div key={i} className="w-1 rounded-sm bg-cyan-500/30" style={{ height: `${h * 3}px` }} />
+            ))}
+          </div>
         </Card>
 
-        <Card glow className="relative overflow-hidden">
+        <Card glow className="relative overflow-hidden card-hover-glow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
             <span>24h Synthetic Executions</span>
-            <Play className="w-4 h-4 text-emerald-400" />
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/15 flex items-center justify-center">
+              <Play className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
           </div>
-          <div className="text-3xl font-bold text-white tracking-tight">
+          <div className={`text-3xl font-bold text-white tracking-tight ${animated ? 'animate-count-up' : 'opacity-0'}`}>
             {total24hRuns > 0 ? total24hRuns.toLocaleString() : '1,420'}
           </div>
           <div className="mt-2 text-xs text-slate-400">
             Across 1m & 5m background schedules
           </div>
+          <div className="absolute bottom-2 right-2 flex items-end gap-0.5">
+            {[2, 4, 6, 5, 7, 6, 8].map((h, i) => (
+              <div key={i} className="w-1 rounded-sm bg-emerald-500/30" style={{ height: `${h * 3}px` }} />
+            ))}
+          </div>
         </Card>
 
-        <Card glow className="relative overflow-hidden">
+        <Card glow className="relative overflow-hidden card-hover-glow">
           <div className="flex items-center justify-between text-slate-400 text-xs font-medium mb-2">
             <span>Active Incidents</span>
-            <AlertTriangle className="w-4 h-4 text-rose-400" />
+            <div className="w-7 h-7 rounded-lg bg-rose-500/15 flex items-center justify-center">
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />
+            </div>
           </div>
-          <div className="text-3xl font-bold text-rose-400 tracking-tight">
+          <div className={`text-3xl font-bold text-rose-400 tracking-tight ${animated ? 'animate-count-up' : 'opacity-0'}`}>
             {activeIncidents > 0 ? activeIncidents : '1'}
           </div>
           <div className="mt-2 text-xs text-rose-300/80 flex items-center gap-1">
             <Sparkles className="w-3.5 h-3.5" /> AI RCA suggestions available
+          </div>
+          <div className="absolute bottom-2 right-2 flex items-end gap-0.5">
+            {[1, 2, 1, 3, 2, 1, 2].map((h, i) => (
+              <div key={i} className="w-1 rounded-sm bg-rose-500/30" style={{ height: `${h * 3}px` }} />
+            ))}
           </div>
         </Card>
       </div>
@@ -339,6 +406,82 @@ export const Dashboard: React.FC = () => {
               </Link>
             </div>
           </div>
+        </div>
+      </Card>
+
+      {/* Recent Activity Feed */}
+      <Card className="space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
+          <div>
+            <h3 className="text-base font-semibold text-white flex items-center gap-2">
+              <GitCommit className="w-4 h-4 text-primary-400" />
+              Recent Synthetic Check Results
+            </h3>
+            <p className="text-xs text-slate-400">Live stream of the latest automated endpoint probes</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-60" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400" />
+            </span>
+            <span className="text-[11px] font-mono text-emerald-400">Live</span>
+          </div>
+        </div>
+
+        <div className="divide-y divide-slate-800/60">
+          {activityFeed.map((item, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-4 py-2.5 text-xs animate-fade-in group hover:bg-slate-800/20 rounded-lg px-2 -mx-2 transition-colors"
+              style={{ animationDelay: `${i * 60}ms` }}
+            >
+              {/* Status icon */}
+              <div className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${
+                item.status === 'ok' ? 'bg-emerald-500/15 text-emerald-400' :
+                item.status === 'error' ? 'bg-rose-500/15 text-rose-400' :
+                'bg-amber-500/15 text-amber-400'
+              }`}>
+                {item.status === 'ok' ? <CheckCircle2 className="w-3.5 h-3.5" /> :
+                 item.status === 'error' ? <XCircle className="w-3.5 h-3.5" /> :
+                 <AlertTriangle className="w-3.5 h-3.5" />}
+              </div>
+
+              {/* Time */}
+              <span className="text-slate-600 font-mono w-12 shrink-0">{item.time}</span>
+
+              {/* Method badge */}
+              <span className={`font-mono font-bold px-1.5 py-0.5 rounded text-[10px] shrink-0 ${
+                item.method === 'GET' ? 'text-emerald-300 bg-emerald-500/10' :
+                item.method === 'POST' ? 'text-blue-300 bg-blue-500/10' :
+                item.method === 'DELETE' ? 'text-rose-300 bg-rose-500/10' :
+                'text-amber-300 bg-amber-500/10'
+              }`}>{item.method}</span>
+
+              {/* Path */}
+              <span className="font-mono text-slate-300 flex-1 truncate">{item.path}</span>
+
+              {/* Project */}
+              <span className="text-slate-600 hidden sm:block truncate max-w-[140px]">{item.project}</span>
+
+              {/* Latency */}
+              <span className={`font-mono font-semibold shrink-0 ${
+                item.ms < 200 ? 'text-emerald-400' :
+                item.ms < 1000 ? 'text-amber-400' :
+                'text-rose-400'
+              }`}>{item.ms}ms</span>
+
+              {/* Quick action */}
+              <Zap className="w-3 h-3 text-slate-700 group-hover:text-primary-400 transition-colors shrink-0" />
+            </div>
+          ))}
+        </div>
+
+        <div className="pt-2 border-t border-slate-800">
+          <Link to="/logs">
+            <Button variant="ghost" size="sm" rightIcon={<ArrowUpRight className="w-3.5 h-3.5" />} className="w-full justify-center">
+              Open Full Live Log Stream
+            </Button>
+          </Link>
         </div>
       </Card>
     </div>
